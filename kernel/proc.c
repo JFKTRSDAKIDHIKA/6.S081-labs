@@ -55,6 +55,7 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
+      p->tracingmask = 0;
   }
 }
 
@@ -287,6 +288,9 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+
+  // copy the trace mask from the parent to the child process.
+  np->tracingmask = p->tracingmask;
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
@@ -685,4 +689,19 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// collect the number of processes whose state is not UNUSED.
+int
+get_process_count(void)
+{
+  struct proc *p;
+  int count = 0;
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+      if(p->state != UNUSED)
+        count++;
+  }
+
+  return count;
 }

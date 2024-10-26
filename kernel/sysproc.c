@@ -75,6 +75,38 @@ int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+  uint64 va, user_va, a, last;
+  int n;
+  uint64 buffer;
+  pte_t *pte;
+  
+  argaddr(0, &va);
+  argint(1, &n);
+  argaddr(2, &user_va);
+  
+  if(n > 64){
+    printf("pgaccess: too many pages\n");
+    return -1;
+  }
+  
+  buffer = 0L;
+  a = va;
+  last = va + (n - 1) * PGSIZE;
+  for(;;){
+    if((pte = walk(myproc()->pagetable, a, 1)) == 0)  
+      return -1;
+    if(*pte & PTE_A){
+      buffer |= (1L << PAGE_INDEX(a, va)); 
+      *pte &= ~PTE_A;
+    } 
+    if(a == last)
+      break;
+    a += PGSIZE; 
+  }
+  
+  if(copyout(myproc()->pagetable, user_va, (char*)(&buffer), sizeof(buffer)) < 0) 
+    printf("pgaccess: copyout\n");
+
   return 0;
 }
 #endif
@@ -100,3 +132,4 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+

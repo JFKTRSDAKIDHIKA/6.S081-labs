@@ -1,0 +1,5 @@
+optimizing system calls by using shared pages can significantly enhance performance by reducing the overhead of switching between user space and kernel space.
+int fstat(int fd, struct stat*);
+sysinfo()
+
+Explain the output of vmprint in terms of Fig 3-4 from the text. What does page 0 contain? What is in page 2? When running in user mode, could the process read/write the memory mapped by page 1? What does the third to last page contain?

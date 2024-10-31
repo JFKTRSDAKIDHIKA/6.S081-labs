@@ -104,4 +104,11 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // these are new members supporting sys_sigalarm().
+  int alarm_interval;          // the alarm interval
+  void (*alarm_handler)(void); //  the pointer to the handler function
+  int ticks_since_last_alarm;  // how many ticks have passed since the last call 
+  struct trapframe *trapframe_for_alarm; 
+  int alarm_enable;           // Prevent re-entrant calls to the handler;
 };

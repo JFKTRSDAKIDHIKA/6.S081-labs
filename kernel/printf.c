@@ -133,3 +133,24 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+void
+backtrace(void)
+{
+  // frame pointer
+  uint64 fp;
+  // return address
+  uint64 ra;
+  // s0 points to the top of the current stack, sp points to initial stack.
+  uint64 sp = r_fp(); 
+  fp = sp;
+
+  // check if it has seen the last stack frame, and should stop.
+  // note that the hightest stack do not need to return.
+  while((fp < PGROUNDDOWN(sp) + PGSIZE) && (fp >= PGROUNDDOWN(sp))){
+    ra = *((uint64 *)(fp - 8));
+    printf("%p\n", ra);
+    fp = *((uint64 *)(fp - 16));
+  }
+  return;
+}

@@ -66,7 +66,18 @@ usertrap(void)
 
     syscall();
   } else if((which_dev = devintr()) != 0){
-    // ok
+    // only want to manipulate a process's alarm ticks 
+    // if there's a timer interrupt
+    if(p->alarm_enable && which_dev == 2 && p->alarm_interval != 0){
+      p->ticks_since_last_alarm++;
+      if(p->ticks_since_last_alarm == p->alarm_interval){
+        memmove(p->trapframe_for_alarm, p->trapframe, sizeof(*(p->trapframe)));   
+        p->trapframe->epc = (uint64)p->alarm_handler;
+        p->ticks_since_last_alarm = 0;
+        // Disable alarm to Prevent re-entrant calls to the handler.
+        p->alarm_enable = 0;
+      } 
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

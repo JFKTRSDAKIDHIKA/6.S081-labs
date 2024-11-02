@@ -2207,7 +2207,6 @@ sbrkfail(char *s)
     printf("%s: failed sbrk leaked memory\n", s);
     exit(1);
   }
-
   // test running fork with the above allocated page 
   pid = fork();
   if(pid < 0){
@@ -2224,6 +2223,7 @@ sbrkfail(char *s)
     for (i = 0; i < 10*BIG; i += PGSIZE) {
       n += *(a+i);
     }
+printf("0000000\n");
     // print n so the compiler doesn't optimize away
     // the for loop.
     printf("%s: allocate a lot of memory succeeded %d\n", s, n);
@@ -3014,7 +3014,6 @@ countfree()
 
       // modify the memory to make sure it's really allocated.
       *(char *)(a + 4096 - 1) = 1;
-
       // report back one more page.
       if(write(fds[1], "x", 1) != 1){
         printf("write() failed in countfree()\n");

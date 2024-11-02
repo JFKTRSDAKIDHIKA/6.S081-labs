@@ -65,6 +65,46 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 15 && r_stval() < MAXVA){
+    // Handle store page fault, both COW bit set or not set.
+    // if faulting_va >= MAXVA, handle elsewhere.
+    pte_t *pte;
+    uint64 faulting_va = r_stval();
+    faulting_va = PGROUNDDOWN(faulting_va);
+    char *mem;
+    uint64 pa;
+    uint flags;
+
+    if((pte = walk(p->pagetable, faulting_va, 0)) == 0)
+      panic("usertrap(): pte should exist");
+    if((*pte & PTE_V) == 0)
+      panic("usertrap(): page not present");
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+    flags |= PTE_W;
+    flags &= ~PTE_COW;
+
+    // a page-fault occurs on a COW page
+    if(*pte & PTE_COW){
+      // allocate a new page with kalloc()
+      // If a COW page fault occurs and there's no free memory, 
+      // the process should be killed.
+      if((mem = kalloc()) == 0){
+        setkilled(p);
+      } else {
+        // copy the old page to the new page
+        memmove(mem, (char*)pa, PGSIZE);
+        // install the new page in the PTE with PTE_W set
+        uvmunmap(p->pagetable, faulting_va, 1, 1);
+        // Why kfree is needed when unmap a page?
+        // Because that's how kernel syncronize the parent and the child.
+        mappages(p->pagetable, faulting_va, PGSIZE, (uint64)mem, flags);
+      }
+    } else {
+      printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      setkilled(p);
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

@@ -15,6 +15,8 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+extern int page_ref_count[PAGE_REF_COUNT_SIZE];
+
 // Make a direct-map page table for the kernel.
 pagetable_t
 kvmmake(void)
@@ -167,6 +169,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       break;
     a += PGSIZE;
     pa += PGSIZE;
+    
   }
   return 0;
 }
@@ -190,6 +193,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
+
     if(do_free){
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
@@ -315,7 +319,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -324,13 +327,24 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    // Clear PTE_W in the PTEs of parent and set the COW bit.
+    // Note that only the originally writable PTES can be set COW bit.
+    if(*pte & PTE_W){
+      *pte |= PTE_COW;
+      *pte &= ~PTE_W;
+    }
+    // Clear PTE_W in the PTEs of child and set the COW bit.
+    // Note that only the originally writable PTEs can be set COW bit.
+    if(flags & PTE_W){
+      flags |= PTE_COW;
+      flags &= ~PTE_W;
+    }
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
       goto err;
     }
+    // Increment a page's reference count 
+    // when fork causes a child to share the page
+    page_ref_count[PHYS_ADDR_TO_INDEX(pa)]++; 
   }
   return 0;
 
@@ -360,15 +374,33 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
   pte_t *pte;
+  uint flags;
+  char *mem;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     if(va0 >= MAXVA)
       return -1;
     pte = walk(pagetable, va0, 0);
-    if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 ||
-       (*pte & PTE_W) == 0)
+    if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 || ((*pte & PTE_W) == 0 && (*pte & PTE_COW) == 0))
       return -1;
+    
+    // Modify copyout() to use the same scheme 
+    // as page faults when it encounters a COW page.
+    if((*pte & PTE_W) == 0 && (*pte & PTE_COW) != 0){
+      flags = PTE_FLAGS(*pte);
+      flags |= PTE_W;
+      flags &= ~PTE_COW;
+      if((mem = kalloc()) == 0){
+         setkilled(myproc());
+      } else {
+        memmove(mem, (char*)(PTE2PA(*pte)), PGSIZE);
+        uvmunmap(pagetable, va0, 1, 1);
+        mappages(pagetable, va0, PGSIZE, (uint64)mem, flags);
+      }
+    }
+   
+    pte = walk(pagetable, va0, 0); 
     pa0 = PTE2PA(*pte);
     n = PGSIZE - (dstva - va0);
     if(n > len)

@@ -136,8 +136,10 @@ filewrite(struct file *f, uint64 addr, int n)
 {
   int r, ret = 0;
 
-  if(f->writable == 0)
+  if(f->writable == 0){
+    printf("filewrite: file not writable\n");
     return -1;
+  }
 
   if(f->type == FD_PIPE){
     ret = pipewrite(f->pipe, addr, n);

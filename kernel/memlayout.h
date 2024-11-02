@@ -44,6 +44,19 @@
 #define KERNBASE 0x80000000L
 #define PHYSTOP (KERNBASE + 128*1024*1024)
 
+// Macro to define the size of page_ref_count array
+// The size is calculated based on the total number of physical pages
+// available for the kernel and user pages, starting from KERNBASE
+// up to PHYSTOP, divided by PGSIZE, which represents the page size.
+//
+// This size limits the maximum number of entries in the page_ref_count array,
+// ensuring that it covers all possible physical pages within this range.
+#define PAGE_REF_COUNT_SIZE ((PHYSTOP - KERNBASE) / PGSIZE)
+
+// Macro to convert a physical address (PA) to an index in the page_ref_count array.
+// This calculates the index based on the offset from KERNBASE divided by the page size (PGSIZE).
+#define PHYS_ADDR_TO_INDEX(PA) ((PA - KERNBASE) / PGSIZE)
+
 // map the trampoline page to the highest address,
 // in both user and kernel space.
 #define TRAMPOLINE (MAXVA - PGSIZE)
